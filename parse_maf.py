@@ -66,11 +66,12 @@ def _get_args():
 def main():
     args = _get_args()
     genomes = args.assemblies.split(",")  # The list to store all included genomes
+    anchor = genomes[0]
     if args.log:
         logging.basicConfig(filename=args.out+'.log', filemode='w', level=logging.INFO)
     curr_block = OrderedDict()
     last_block = OrderedDict()
-    holding_block = OrderedDict()
+    moddle_block = OrderedDict()
     with open(args.maf, 'r') as Fh:
         with open(args.out, 'w') as Out:
             for num, line in enumerate(Fh, 1):
@@ -84,7 +85,7 @@ def main():
                 if lead == 'a':  # new alignmentblock
 
                     if curr_block:
-                        do_stuff(curr_block, genomes, Out)
+                        do_stuff(last_block, middle_block, curr_block, genomes, args.gap, Out)
 
                     curr_block = OrderedDict()
                     for item in linelist:
@@ -129,21 +130,33 @@ def main():
                     curr_block[assembly]['strand'] = strand
                     curr_block[assembly]['chrlenth'] = int(chrlenth)
                     curr_block[assembly]['gapStatus'] = gapStatus
-                    # curr_block[assembly]['deletion'] = curr_block[anchor]['length']
+                    curr_block[assembly]['deletion'] = curr_block[anchor]['length']
                 if lead == 'q':
                     (assembly, chrom) = linelist.pop(0).split(".", maxsplit=1)
                     quality = linelist[0]
                     curr_block[assembly]['quality'] = quality
 
             else:
-                do_stuff(curr_block, genomes, Out)
+                do_stuff(last_block, curr_block, genomes, args.gap, Out)
 
 
-def do_stuff(curr_block, genomes, Out):
-    if _is_aln(curr_block, genomes):
-        logging.info("all found!")
-        anchor_length = stat_block(curr_block, genomes)
-        Out.write("%d\n" % anchor_length)
+def do_stuff(last_block, middle_block, curr_block, genomes, indel_length, Out):
+    # get gap in between 2 blocks for each assembly
+    # get gap in the curr_block for each assembly
+    # add up gaps from last block to in between gap to curr_block gap
+    # if gaps < the threshold,
+    if _is_complete(curr_block):
+        if last_block:
+            if middle_block:
+                # compare last_block with curr_block
+                # merge to last block, new middle_block
+                temp_block, middle_block = compare(middle_block, curr_block, genomes, indel_length)
+            else:
+                # compare last_block with curr_block
+                # merge to last block, new middle_block
+                last_block, middle_block = compare(last_block, curr_block, genomes, indel_length)
+        else:
+            last_block = curr_block
 
 
 def _is_complete(curr_block, genomes):
@@ -167,6 +180,13 @@ def _is_aln(curr_block, genomes):
             complete = 0
             logging.info("%s is a gap" % assembly)
     return complete
+
+
+def compare(last_block, curr_block, genomes, indel_length):
+    anchor = genomes[0]
+    merged_block = OrderedDict()
+    for assembly in genomes:
+        if (curr_block[assembly]['chrom'] == last_block[assembly]['chrom'] and curr_block[anchor]['strand'] == last_block[anchor]['strand']):
 
 
 def compare_blocks(last_block, curr_block, genomes, indel_length):  # return "merge_now", "hold" or "break"
