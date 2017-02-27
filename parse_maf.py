@@ -154,6 +154,9 @@ def do_stuff(last_block, middle_block, curr_block, genomes, indel_length, Out):
             else:
                 # compare last_block with curr_block
                 # merge to last block, new middle_block
+                # Two blocks status: break(gap between them > indel_length, or accumulated gap length > indel_length if gap);
+                # hold (creat a new middle block with a new gap species < indel_length);
+                # merge (same curr_block to middle_block because same status for each assembly and gap length < indel_length);
                 last_block, middle_block = _compare_block(last_block, curr_block, genomes, indel_length)
         else:
             last_block = curr_block
