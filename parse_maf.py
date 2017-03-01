@@ -71,7 +71,6 @@ def main():
         logging.basicConfig(filename=args.out+'.log', filemode='w', level=logging.INFO)
     curr_block = OrderedDict()
     last_block = OrderedDict()
-    moddle_block = OrderedDict()
     with open(args.maf, 'r') as Fh:
         with open(args.out, 'w') as Out:
             for num, line in enumerate(Fh, 1):
@@ -85,7 +84,7 @@ def main():
                 if lead == 'a':  # new alignmentblock
 
                     if curr_block:
-                        do_stuff(last_block, middle_block, curr_block, genomes, args.gap, Out)
+                        do_strick_merge_stuff(last_block, curr_block, genomes, Out)
 
                     curr_block = OrderedDict()
                     for item in linelist:
@@ -137,29 +136,36 @@ def main():
                     curr_block[assembly]['quality'] = quality
 
             else:
-                do_stuff(last_block, curr_block, genomes, args.gap, Out)
+                do_strick_merge_stuff(last_block, curr_block, genomes, Out)
+                print_block(last_block)
 
 
-def do_stuff(last_block, middle_block, curr_block, genomes, indel_length, Out):
+def do_strick_merge_stuff(last_block, curr_block, genomes, Out):  # merge alignment blocks that are continued without any gap. C, 0 or same gap.
+    if _is_complete(curr_block, genomes):
+        anchor = genomes[0]
+        merge = 1
+        for assembly in genomes:
+            if assembly == anchor:
+                merged_block[assembly] = merge_eachblocks(last_block[assembly], curr_block[assembly], 'anchor')
+            else:
+                mergability, merged_assembly = _can_merge(last_block[assembly], curr_block[assembly])
+                if mergability == 1:
+                    merged_block[assembly] = merged_assembly
+                else:
+                    merge = 0
+                    break
+        if merge == 0:
+            print_block(last_block)
+            last_block = curr_block
+        else:
+            merge_block['score'] = last_block['score'] + curr_block['score']
+            last_block = merged_block
+
+
     # get gap in between 2 blocks for each assembly
     # get gap in the curr_block for each assembly
     # add up gaps from last block to in between gap to curr_block gap
     # if gaps < the threshold,
-    if _is_complete(curr_block):
-        if last_block:
-            if middle_block:
-                # compare last_block with curr_block
-                # merge to last block, new middle_block
-                temp_block, middle_block = _compare_block(middle_block, curr_block, genomes, indel_length)
-            else:
-                # compare last_block with curr_block
-                # merge to last block, new middle_block
-                # Two blocks status: break(gap between them > indel_length, or accumulated gap length > indel_length if gap);
-                # hold (creat a new middle block with a new gap species < indel_length);
-                # merge (same curr_block to middle_block because same status for each assembly and gap length < indel_length);
-                last_block, middle_block = _compare_block(last_block, curr_block, genomes, indel_length)
-        else:
-            last_block = curr_block
 
 
 def _is_complete(curr_block, genomes):
@@ -185,11 +191,37 @@ def _is_aln(curr_block, genomes):
     return complete
 
 
-def _compare_block(last_block, curr_block, genomes, indel_length):
-    anchor = genomes[0]
-    merged_block = OrderedDict()
-    for assembly in genomes:
-        _compare_assembly(last_block[assembly], curr_block[assembly], indel_length)
+def _can_merge(last_assembly, curr_assembly):
+    if (curr_assembly['chrom'] == last_assembly['chrom'] and curr_assembly['strand'] == curr_assembly['strand']):
+        if last_assembly['aln'] == 0 and curr_assembly['aln'] == 0:
+            if (curr_assembly['start'] == last_assembly['start'] and
+                    curr_assembly['length'] == last_assembly['length'] and
+                    curr_assembly['strand'] == last_assembly['strand'] and
+                    curr_assembly['gapStatus'] == last_assembly['gapStatus']):
+                mergability = 1
+                merged_assembly = merge_eachblocks(last_assembly, curr_assembly, 'gap')
+            else:
+                mergability = 0
+        elif last_assembly['aln'] == 1 and curr_assembly['aln'] == 1:
+            if (last_assembly['rightStatus'] == 'C' and
+                    last_assembly['rightCount'] == 0 and
+                    curr_assembly['leftStatus'] == 'C' and
+                    curr_assembly['leftCount'] == 0):
+                if last_assembly['start'] + last_assembly['length'] == curr_assembly['start']:
+                    mergability = 1
+                    merged_assembly = merge_eachblocks(last_assembly, curr_assembly, 'aln')
+                else:
+                    mergability = 0
+            else:
+                mergability = 0
+        else:
+            mergability = 0
+    else:
+        mergability = 0
+    return mergability, merged_assembly
+
+
+
 
 
 def _compare_assembly(last_assembly, curr_assembly, indel_length):
@@ -665,32 +697,32 @@ def print_block(block, Out):
     if bool(block):
         Out.write("a\tscore: %.6f\n" % (block['score']))
         # Out.write("a\tscore= %.6f\n" % (6.66))
-        # for key in block:
-        #     if key == 'score':
-        #         continue
-        #     if 'seq' in block[key] and 'leftStatus' not in block[key]:
-        #         refList.append(key)
-        #     if 'seq' in block[key] and 'leftStatus' in block[key]:
-        #         alnList.append(key)
-        #     if 'gapStatus' in block[key]:
-        #         gapList.append(key)
-        # if len(refList) > 1: print("missing i line?")
-        # for key in refList:
-        #     Out.write("%s.%s\t%d\t%d\t%s\t=\n" % (key, block[key]['chrom'], block[key]['start'], block[key]['length'], block[key]['strand']))
-        #     #Out.write("s\t%s.%s\t%d\t%d\t%s\t%d\t%s\n" % (key, block[key]['chrom'], block[key]['start'], block[key]['length'], block[key]['strand'], block[key]['chrlenth'], block[key]['seq']))
-        # for key in alnList:
-        #     Out.write("%s.%s\t%d\t%d\t%s\t=\n" % (key, block[key]['chrom'], block[key]['start'], block[key]['length'], block[key]['strand']))
-        #     #Out.write("s\t%s.%s\t%d\t%d\t%s\t%d\t%s\n" % (key, block[key]['chrom'], block[key]['start'], block[key]['length'], block[key]['strand'], block[key]['chrlenth'], block[key]['seq']))
-        #     #Out.write("i\t%s.%s\t%s\t%d\t%s\t%d\n" % (key, block[key]['chrom'], block[key]['leftStatus'], block[key]['leftCount'], block[key]['rightStatus'], block[key]['rightCount']))
-        # for key in gapList:
-        #     Out.write("%s.%s\t%d\t%d\t%s\t-\n" % (key, block[key]['chrom'], block[key]['start'], block[key]['length'], block[key]['strand']))
-        #     # Out.write("e\t%s.%s\t%d\t%d\t%s\t%d\t%s\n" % (key, block[key]['chrom'], block[key]['start'], block[key]['length'], block[key]['strand'], block[key]['chrlenth'], block[key]['gapStatus']))
-
-
         for key in block:
             if key == 'score':
                 continue
-            Out.write("%s.%s\t%d\t%d\t%s\t=\n" % (key, block[key]['chrom'], block[key]['start'], block[key]['length'], block[key]['strand']))
+            if 'seq' in block[key] and 'leftStatus' not in block[key]:
+                refList.append(key)
+            if 'seq' in block[key] and 'leftStatus' in block[key]:
+                alnList.append(key)
+            if 'gapStatus' in block[key]:
+                gapList.append(key)
+        if len(refList) > 1: print("missing i line?")
+        for key in refList:
+            # Out.write("%s.%s\t%d\t%d\t%s\t=\n" % (key, block[key]['chrom'], block[key]['start'], block[key]['length'], block[key]['strand']))
+            Out.write("s\t%s.%s\t%d\t%d\t%s\t%d\t%s\n" % (key, block[key]['chrom'], block[key]['start'], block[key]['length'], block[key]['strand'], block[key]['chrlenth'], block[key]['seq']))
+        for key in alnList:
+            # Out.write("%s.%s\t%d\t%d\t%s\t=\n" % (key, block[key]['chrom'], block[key]['start'], block[key]['length'], block[key]['strand']))
+            Out.write("s\t%s.%s\t%d\t%d\t%s\t%d\t%s\n" % (key, block[key]['chrom'], block[key]['start'], block[key]['length'], block[key]['strand'], block[key]['chrlenth'], block[key]['seq']))
+            Out.write("i\t%s.%s\t%s\t%d\t%s\t%d\n" % (key, block[key]['chrom'], block[key]['leftStatus'], block[key]['leftCount'], block[key]['rightStatus'], block[key]['rightCount']))
+        for key in gapList:
+            # Out.write("%s.%s\t%d\t%d\t%s\t-\n" % (key, block[key]['chrom'], block[key]['start'], block[key]['length'], block[key]['strand']))
+            Out.write("e\t%s.%s\t%d\t%d\t%s\t%d\t%s\n" % (key, block[key]['chrom'], block[key]['start'], block[key]['length'], block[key]['strand'], block[key]['chrlenth'], block[key]['gapStatus']))
+
+
+        # for key in block:
+        #     if key == 'score':
+        #         continue
+        #     Out.write("%s.%s\t%d\t%d\t%s\t=\n" % (key, block[key]['chrom'], block[key]['start'], block[key]['length'], block[key]['strand']))
 
 
         Out.write("\n")
