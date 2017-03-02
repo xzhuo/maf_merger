@@ -68,7 +68,7 @@ def main():
     genomes = args.assemblies.split(",")  # The list to store all included genomes
     anchor = genomes[0]
     if args.log:
-        logging.basicConfig(filename=args.out+'.log', filemode='w', level=logging.INFO)
+        logging.basicConfig(filename=args.out + '.log', filemode='w', level=logging.INFO)
     curr_block = OrderedDict()
     last_block = OrderedDict()
     with open(args.maf, 'r') as Fh:
@@ -84,7 +84,7 @@ def main():
                 if lead == 'a':  # new alignmentblock
 
                     if curr_block:
-                        do_strick_merge_stuff(last_block, curr_block, genomes, Out)
+                        last_block = do_strick_merge_stuff(last_block, curr_block, genomes, Out)
 
                     curr_block = OrderedDict()
                     for item in linelist:
@@ -93,7 +93,7 @@ def main():
                             curr_block[key] = float(value)
                         except ValueError:
                             print("Found abnormal a line in %d!" % (num))
-                if lead == 's':
+                elif lead == 's':
                     (assembly, chrom) = linelist.pop(0).split(".", maxsplit=1)
                     if assembly not in genomes:
                         continue
@@ -106,7 +106,7 @@ def main():
                     curr_block[assembly]['strand'] = strand
                     curr_block[assembly]['chrlenth'] = int(chrlenth)
                     curr_block[assembly]['seq'] = seq
-                if lead == 'i':
+                elif lead == 'i':
                     (assembly, chrom) = linelist.pop(0).split(".", maxsplit=1)
                     if assembly not in genomes:
                         continue
@@ -116,7 +116,7 @@ def main():
                     curr_block[assembly]['leftCount'] = int(leftCount)
                     curr_block[assembly]['rightStatus'] = rightStatus
                     curr_block[assembly]['rightCount'] = int(rightCount)
-                if lead == 'e':
+                elif lead == 'e':
                     (assembly, chrom) = linelist.pop(0).split(".", maxsplit=1)
                     if assembly not in genomes:
                         continue
@@ -130,36 +130,42 @@ def main():
                     curr_block[assembly]['chrlenth'] = int(chrlenth)
                     curr_block[assembly]['gapStatus'] = gapStatus
                     curr_block[assembly]['deletion'] = curr_block[anchor]['length']
-                if lead == 'q':
+                elif lead == 'q':
                     (assembly, chrom) = linelist.pop(0).split(".", maxsplit=1)
                     quality = linelist[0]
                     curr_block[assembly]['quality'] = quality
 
             else:
-                do_strick_merge_stuff(last_block, curr_block, genomes, Out)
-                print_block(last_block)
+                last_block = do_strick_merge_stuff(last_block, curr_block, genomes, Out)
+                print_block(last_block, Out)
 
 
 def do_strick_merge_stuff(last_block, curr_block, genomes, Out):  # merge alignment blocks that are continued without any gap. C, 0 or same gap.
     if _is_complete(curr_block, genomes):
-        anchor = genomes[0]
-        merge = 1
-        for assembly in genomes:
-            if assembly == anchor:
-                merged_block[assembly] = merge_eachblocks(last_block[assembly], curr_block[assembly], 'anchor')
-            else:
-                mergability, merged_assembly = _can_merge(last_block[assembly], curr_block[assembly])
-                if mergability == 1:
-                    merged_block[assembly] = merged_assembly
+        # ipdb.set_trace()
+        if _is_complete(last_block, genomes):
+            anchor = genomes[0]
+            merged_block = OrderedDict()
+            merge = 1
+            for assembly in genomes:
+                if assembly == anchor:
+                    merged_block[assembly] = merge_eachblocks(last_block[assembly], curr_block[assembly], 'anchor')
                 else:
-                    merge = 0
-                    break
-        if merge == 0:
-            print_block(last_block)
-            last_block = curr_block
+                    mergability, merged_assembly = _can_merge(last_block[assembly], curr_block[assembly])
+                    if mergability == 1:
+                        merged_block[assembly] = merged_assembly
+                    else:
+                        merge = 0
+                        break
+            if merge == 0:
+                print_block(last_block, Out)
+                last_block = copy.deepcopy(curr_block)
+            else:
+                merged_block['score'] = last_block['score'] + curr_block['score']
+                last_block = copy.deepcopy(merged_block)
         else:
-            merge_block['score'] = last_block['score'] + curr_block['score']
-            last_block = merged_block
+            last_block = copy.deepcopy(curr_block)
+    return last_block
 
 
     # get gap in between 2 blocks for each assembly
@@ -192,6 +198,7 @@ def _is_aln(curr_block, genomes):
 
 
 def _can_merge(last_assembly, curr_assembly):
+    merged_assembly = {}
     if (curr_assembly['chrom'] == last_assembly['chrom'] and curr_assembly['strand'] == curr_assembly['strand']):
         if last_assembly['aln'] == 0 and curr_assembly['aln'] == 0:
             if (curr_assembly['start'] == last_assembly['start'] and
@@ -224,63 +231,63 @@ def _can_merge(last_assembly, curr_assembly):
 
 
 
-def _compare_assembly(last_assembly, curr_assembly, indel_length):
-    merged_assembly = OrderedDict()
-    if (curr_assembly['chrom'] == last_assembly['chrom'] and curr_assembly['strand'] == curr_assembly['strand']):
-        if last_assembly['aln'] == 0 and curr_assembly['aln'] == 0:
-            if (curr_assembly['start'] == last_assembly['start'] and
-                    curr_assembly['length'] == last_assembly['length'] and
-                    curr_assembly['strand'] == last_assembly['strand'] and
-                    curr_assembly['gapStatus'] == last_assembly['gapStatus']):
-                status = 'same'
-                merged_assembly = last_assembly
-            else:
-                status = 'break'
-                ipdb.set_trace()
-                logging.error("I don't expect this %s, %d" % (curr_assembly['chrom'], curr_assembly['start']))
-        elif last_assembly['aln'] == 1 and curr_assembly['aln'] == 1:
-            if curr_assembly['leftStatus'] == 'C':
-                if last_assembly['start'] + last_assembly['length'] == curr_assembly['start']:
-                    status = 'same'
-                else:
-                    logging.warning("C warning! Possible SV in %s, %d, %s, %d!" % (last_assembly['chrom'], last_assembly['start'], curr_assembly['chrom'], curr_assembly['start']))
-                    status = 'break'
-            elif curr_assembly['leftStatus'] == 'I' or curr_assembly['leftStatus'] == 'M':
-                if last_assembly['start'] + last_assembly['length'] + last_assembly['rightCount'] == curr_assembly['start']:
-                    status = 'same'
-                else:
-                    logging.warning("%s warning! Possible SV in %s, %d, %s, %d!" % (curr_assembly['leftStatus'], last_assembly['chrom'], last_assembly['start'], curr_assembly['chrom'], curr_assembly['start']))
-                    status = 'break'
-            else:
-                status = 'break'
-                ipdb.set_trace()
-                logging.info("Different Status? break blocks %s, %d, %s and %s" % (curr_assembly['chrom'], curr_assembly['start'], last_assembly['rightStatus'], curr_assembly['leftStatus']))
+# def _compare_assembly(last_assembly, curr_assembly, indel_length):
+#     merged_assembly = OrderedDict()
+#     if (curr_assembly['chrom'] == last_assembly['chrom'] and curr_assembly['strand'] == curr_assembly['strand']):
+#         if last_assembly['aln'] == 0 and curr_assembly['aln'] == 0:
+#             if (curr_assembly['start'] == last_assembly['start'] and
+#                     curr_assembly['length'] == last_assembly['length'] and
+#                     curr_assembly['strand'] == last_assembly['strand'] and
+#                     curr_assembly['gapStatus'] == last_assembly['gapStatus']):
+#                 status = 'same'
+#                 merged_assembly = last_assembly
+#             else:
+#                 status = 'break'
+#                 ipdb.set_trace()
+#                 logging.error("I don't expect this %s, %d" % (curr_assembly['chrom'], curr_assembly['start']))
+#         elif last_assembly['aln'] == 1 and curr_assembly['aln'] == 1:
+#             if curr_assembly['leftStatus'] == 'C':
+#                 if last_assembly['start'] + last_assembly['length'] == curr_assembly['start']:
+#                     status = 'same'
+#                 else:
+#                     logging.warning("C warning! Possible SV in %s, %d, %s, %d!" % (last_assembly['chrom'], last_assembly['start'], curr_assembly['chrom'], curr_assembly['start']))
+#                     status = 'break'
+#             elif curr_assembly['leftStatus'] == 'I' or curr_assembly['leftStatus'] == 'M':
+#                 if last_assembly['start'] + last_assembly['length'] + last_assembly['rightCount'] == curr_assembly['start']:
+#                     status = 'same'
+#                 else:
+#                     logging.warning("%s warning! Possible SV in %s, %d, %s, %d!" % (curr_assembly['leftStatus'], last_assembly['chrom'], last_assembly['start'], curr_assembly['chrom'], curr_assembly['start']))
+#                     status = 'break'
+#             else:
+#                 status = 'break'
+#                 ipdb.set_trace()
+#                 logging.info("Different Status? break blocks %s, %d, %s and %s" % (curr_assembly['chrom'], curr_assembly['start'], last_assembly['rightStatus'], curr_assembly['leftStatus']))
 
-        elif last_assembly['aln'] == 1 and curr_assembly['aln'] == 0:
+#         elif last_assembly['aln'] == 1 and curr_assembly['aln'] == 0:
+#             status = 'break'
+#         elif last_assembly['aln'] == 0 and curr_assembly['aln'] == 1:
+#             if last_assembly['start'] + last_assembly['length'] == curr_assembly['start']:
+#                 if curr_assembly['length'] < indel_length:
+#                     status[assembly] = 'diff10'
+#                 else:
+#                     status[assembly] = 'b'
+#                     logging.info("gap too big to merge! %s, %s. %d and %d to %d" % (assembly, last_assembly['chrom'], last_assembly['start'], last_assembly['length'], curr_assembly['start']))
+#             elif last_assembly['start'] + last_assembly['length'] == curr_assembly['start'] + curr_assembly['length']:
+#                 if curr_assembly['length'] < indel_length:
+#                     status[assembly] = 'diff10'
+#                 else:
+#                     status[assembly] = 'b'
+#                     logging.info("gap too big to merge! %s, %s. %d and %d to %d" % (assembly, last_assembly['chrom'], last_assembly['start'], last_assembly['length'], curr_assembly['start']))
+#             else:
+#                 status[assembly] = 'b'
+#                 ipdb.set_trace()
+#                 logging.error("length discrepency! %s, %s. %d and %d is not %d" % (assembly, last_assembly['chrom'], last_assembly['start'], last_assembly['length'], curr_assembly['start']))
 
-        elif last_assembly['aln'] == 0 and curr_assembly['aln'] == 1:
-            if last_assembly['start'] + last_assembly['length'] == curr_assembly['start']:
-                if curr_assembly['length'] < indel_length:
-                    status[assembly] = 'diff10'
-                else:
-                    status[assembly] = 'b'
-                    logging.info("gap too big to merge! %s, %s. %d and %d to %d" % (assembly, last_assembly['chrom'], last_assembly['start'], last_assembly['length'], curr_assembly['start']))
-            elif last_assembly['start'] + last_assembly['length'] == curr_assembly['start'] + curr_assembly['length']:
-                if curr_assembly['length'] < indel_length:
-                    status[assembly] = 'diff10'
-                else:
-                    status[assembly] = 'b'
-                    logging.info("gap too big to merge! %s, %s. %d and %d to %d" % (assembly, last_assembly['chrom'], last_assembly['start'], last_assembly['length'], curr_assembly['start']))
-            else:
-                status[assembly] = 'b'
-                ipdb.set_trace()
-                logging.error("length discrepency! %s, %s. %d and %d is not %d" % (assembly, last_assembly['chrom'], last_assembly['start'], last_assembly['length'], curr_assembly['start']))
-
-        else:
-            logging.error("I don't I am going to get here...what is 'aln' of last_assembly and curr_assembly?")
-    else:
-        status = 'break'
-    return status, merged_assembly
+#         else:
+#             logging.error("I don't I am going to get here...what is 'aln' of last_assembly and curr_assembly?")
+#     else:
+#         status = 'break'
+#     return status, merged_assembly
 
 
 def compare_blocks(last_block, curr_block, genomes, indel_length):  # return "merge_now", "hold" or "break"
