@@ -111,7 +111,7 @@ def maf_iterator(in_maf):
                 (assembly, chrom) = linelist.pop(0).split(".", maxsplit=1)
                 (start, length, strand, chrlenth, seq) = linelist
                 if 'req' not in curr_block:
-                    print("assign anchor here")
+                    # print("assign anchor here")
                     anchor = assembly  # assign anchor as the first assembly in block
                     curr_block['req'] = OrderedDict()
                 curr_block['req'][assembly] = {}
