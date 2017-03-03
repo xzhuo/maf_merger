@@ -6,7 +6,8 @@ import logging
 import ipdb
 import sys
 import maf_iterate
-
+import numpy as np
+import seaborn
 
 def main():
     # maf = sys.argv[1]
@@ -20,7 +21,7 @@ def main():
     dele = []
     for maf in files:
         print(maf)
-        for block in maf_iterate.maf_iterator(maf):
+        for block in maf_iterate.maf_iterator(maf[22]):
             length.append(block['req'][anchor][length])
             block_ins = 0
             block_del = 0
@@ -35,7 +36,12 @@ def main():
                 ins.append(block_ins)
             if block_del:
                 dele.append(block_del)
-
-
+    seaborn.set_style('whitegrid')
+    lengthplot = seaborn.kdeplot(np.array(length))
+    lengthplot.savefig("length.png")
+    insplot = seaborn.kdeplot(np.array(ins))
+    insplot.savefig("insertion.png")
+    delplot = seaborn.kdeplot(np.array(dele))
+    delplot.savefig("deletion.png")
 if __name__ == '__main__':
     main()
