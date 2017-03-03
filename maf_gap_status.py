@@ -21,7 +21,7 @@ def main():
     dele = []
     for maf in files:
         print(maf)
-        for block in maf_iterate.maf_iterator(maf[22]):
+        for block in maf_iterate.maf_iterator(files[22]):
             length.append(block['req'][anchor][length])
             block_ins = 0
             block_del = 0
