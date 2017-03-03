@@ -70,14 +70,17 @@ def main():
         logging.basicConfig(filename=args.out + '.log', filemode='w', level=logging.INFO)
     holding_blocks = []
     for block in maf_iterator(args.maf):
-        if _is_complete(block):
+        if _is_complete(block, genomes):
             curr_block = _clean_block(block, genomes)
             if len(holding_blocks) == 0:
                 holding_blocks.append(curr_block)
-            elif:
+            else:
                 # compare holding_block[-1] with curr_block
                 # merge holding_block[-1] and curr_block into holding_block[-1] if mergable
                 # if gap in any holding_block, evaluate if the gap is too long to hold. if yes, break.
+                last_block = holding_blocks[-1]
+                status = _compare_blocks(last_block, curr_block)  # return break, totally mergable or hold
+
 
 
 def maf_iterator(in_maf):
@@ -180,35 +183,88 @@ def _clean_block(block, genomes):
     return clean_block
 
 
-def _can_merge(last_assembly, curr_assembly):
-    merged_assembly = {}
-    if (curr_assembly['chrom'] == last_assembly['chrom'] and curr_assembly['strand'] == curr_assembly['strand']):
-        if last_assembly['aln'] == 0 and curr_assembly['aln'] == 0:
-            if (curr_assembly['start'] == last_assembly['start'] and
-                    curr_assembly['length'] == last_assembly['length'] and
-                    curr_assembly['strand'] == last_assembly['strand'] and
-                    curr_assembly['gapStatus'] == last_assembly['gapStatus']):
-                mergability = 1
-                merged_assembly = merge_eachblocks(last_assembly, curr_assembly, 'gap')
-            else:
-                mergability = 0
-        elif last_assembly['aln'] == 1 and curr_assembly['aln'] == 1:
-            if (last_assembly['rightStatus'] == 'C' and
-                    last_assembly['rightCount'] == 0 and
-                    curr_assembly['leftStatus'] == 'C' and
-                    curr_assembly['leftCount'] == 0):
-                if last_assembly['start'] + last_assembly['length'] == curr_assembly['start']:
-                    mergability = 1
-                    merged_assembly = merge_eachblocks(last_assembly, curr_assembly, 'aln')
-                else:
-                    mergability = 0
-            else:
-                mergability = 0
-        else:
-            mergability = 0
-    else:
-        mergability = 0
-    return mergability, merged_assembly
+# def _compare_blocks(last_block, curr_block):
+#     if len(last_block['req']) == len(curr_block['req']):
+#         for assembly in last_block['req']:
+#             if assembly in curr_block['req']:
+#                 slkdj
+#             else:
+#                 status = "break"
+#     else:
+#         status = "break"
+
+
+# def _can_merge(last_assembly, curr_assembly):
+#     merged_assembly = {}
+#     if (curr_assembly['chrom'] == last_assembly['chrom'] and curr_assembly['strand'] == curr_assembly['strand']):
+#         if last_assembly['aln'] == 0 and curr_assembly['aln'] == 0:
+#             if (curr_assembly['start'] == last_assembly['start'] and
+#                     curr_assembly['length'] == last_assembly['length'] and
+#                     curr_assembly['strand'] == last_assembly['strand'] and
+#                     curr_assembly['gapStatus'] == last_assembly['gapStatus']):
+#                 mergability = 1
+#                 merged_assembly = merge_eachblocks(last_assembly, curr_assembly, 'gap')
+#             else:
+#                 mergability = 0
+#         elif last_assembly['aln'] == 1 and curr_assembly['aln'] == 1:
+#             if (last_assembly['rightStatus'] == 'C' and
+#                     last_assembly['rightCount'] == 0 and
+#                     curr_assembly['leftStatus'] == 'C' and
+#                     curr_assembly['leftCount'] == 0):
+#                 if last_assembly['start'] + last_assembly['length'] == curr_assembly['start']:
+#                     mergability = 1
+#                     merged_assembly = merge_eachblocks(last_assembly, curr_assembly, 'aln')
+#                 else:
+#                     mergability = 0
+#             else:
+#                 mergability = 0
+#         elif curr_assembly['aln'] == 0 and last_assembly['aln'] == 1:  # combine small indel gap block with aln block.
+#             if last_assembly['start'] + last_assembly['length'] == curr_assembly['start']:
+#                 if curr_assembly['length'] < indel_length:
+#                     status = 'diff10'
+#                 else:
+#                     status = 'b'
+#                     logging.info("gap too big to merge! %s, %s. %d and %d to %d" % (assembly, last_assembly['chrom'], last_assembly['start'], last_assembly['length'], curr_assembly['start']))
+#             elif last_assembly['start'] + last_assembly['length'] == curr_assembly['start'] + curr_assembly['length']:
+#                 if curr_assembly['length'] < indel_length:
+#                     status = 'diff10'
+#                 else:
+#                     status = 'b'
+#                     logging.info("gap too big to merge! %s, %s. %d and %d to %d" % (assembly, last_assembly['chrom'], last_assembly['start'], last_assembly['length'], curr_assembly['start']))
+#             else:
+#                 status = 'b'
+#                 ipdb.set_trace()
+#                 logging.error("length discrepency! %s, %s. %d and %d is not %d" % (assembly, last_assembly['chrom'], last_assembly['start'], last_assembly['length'], curr_assembly['start']))
+#         elif curr_assembly['aln'] == 1 and last_assembly['aln'] == 0:  # combine small indel gap block with aln block.
+#             if last_assembly['start'] + last_assembly['length'] == curr_assembly['start']:
+#                 if last_assembly['length'] < indel_length:
+#                     status = 'diff01'
+#                 else:
+#                     status = 'b'
+#                     logging.info("starting gap too big to merge! %s, %s. %d and %d to %d" % (assembly, last_assembly['chrom'], last_assembly['start'], last_assembly['length'], curr_assembly['start']))
+#             elif last_assembly['start'] + last_assembly['length'] == curr_assembly['start'] + curr_assembly['length']:
+#                 logging.warning("do I need mix2 here?")
+#                 if curr_assembly['length'] < indel_length:
+#                     status = 'diff01'
+#                 else:
+#                     status = 'b'
+#                     logging.info("gap too big to merge! %s, %s. %d and %d to %d" % (assembly, last_assembly['chrom'], last_assembly['start'], last_assembly['length'], curr_assembly['start']))
+#             else:
+#                 status = 'b'
+#                 # ipdb.set_trace()
+#                 logging.info("length discrepency! %s, %s. %d and %d is not %d" % (assembly, last_assembly['chrom'], last_assembly['start'], last_assembly['length'], curr_assembly['start']))
+#         else:
+#             status = 'b'  # b for break
+#             # ipdb.set_trace()
+#             logging.info("breaking blocks! %s, %s, %d, %d and %d" % (assembly, curr_assembly['chrom'], curr_assembly['start'], last_assembly['aln'], curr_assembly['aln']))
+
+
+
+
+
+#     else:
+#         mergability = 0
+#     return mergability, merged_assembly
 
 
 def merge_eachblocks(last_assembly, curr_assembly, kind):
