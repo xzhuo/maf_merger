@@ -18,9 +18,9 @@ def main():
     # maf = sys.argv[1]
     # anchor = sys.argv[2]
     anchor = 'hg19'
-    files = ['chr' + str(x) + '.4species.strict2.maf' for x in range(1, 22)]
-    files.append('chrX.4species.strict2.maf')
-    files.append('chrY.4species.strict2.maf')
+    files = ['/bar/twlab-shared/Epigenome_Evolution/genomes/maf_100way/maf/chr' + str(x) + '.4species.strict2.maf' for x in range(1, 22)]
+    files.append('/bar/twlab-shared/Epigenome_Evolution/genomes/maf_100way/maf/chrX.4species.strict2.maf')
+    files.append('/bar/twlab-shared/Epigenome_Evolution/genomes/maf_100way/maf/chrY.4species.strict2.maf')
     length = []
     ins = []
     dele = []
@@ -44,20 +44,22 @@ def main():
             if block_del:
                 dele.append(block_del)
 
-
+    ipdb.set_trace()
     seaborn.set()
-    # df = sns.load_dataset('iris')
     lengthplot = seaborn.kdeplot(np.array(length))
+    lengthplot.set(xlim=(0, 1000))
     fig = lengthplot.get_figure()
-    fig.savefig("all.4species_length.png")
+    fig.savefig("all.4species_1klength.png")
     plt.clf()
     insplot = seaborn.kdeplot(np.array(ins))
+    insplot.set(xlim=(0, 1000))
     fig = insplot.get_figure()
-    fig.savefig("all.4species_insertion.png")
+    fig.savefig("all.4species_1kinsertion.png")
     plt.clf()
     delplot = seaborn.kdeplot(np.array(dele))
+    delplot.set(xlim=(0, 1000))
     fig = delplot.get_figure()
-    fig.savefig("all.4species_deletion.png")
+    fig.savefig("all.4species_1kdeletion.png")
     plt.close(fig)
 
 
