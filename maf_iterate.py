@@ -6,7 +6,7 @@ import logging
 import ipdb
 
 
-def _get_args():
+def get_args():
     parser = argparse.ArgumentParser(description='simple arguments')
     parser.add_argument(
         '--inmaf',
@@ -63,7 +63,7 @@ def _get_args():
 
 
 def main():
-    args = _get_args()
+    args = get_args()
     genomes = args.assemblies.split(",")  # The list to store all included genomes
     anchor = genomes[0]
     if args.log:
@@ -71,7 +71,7 @@ def main():
     holding_blocks = []
     for block in maf_iterator(args.maf):
         if _is_complete(block, genomes):
-            curr_block = _clean_block(block, genomes)
+            curr_block = clean_block(block, genomes)
             if len(holding_blocks) == 0:
                 holding_blocks.append(curr_block)
             else:
@@ -174,12 +174,15 @@ def _is_aln(curr_block, genomes):
     return complete
 
 
-def _clean_block(block, genomes):
+def clean_block(block, genomes):
     clean_block = {}
     clean_block['anno'] = block['anno']
     for assembly in block['req']:
         if assembly in genomes:
             clean_block['req'][assembly] = block['req'][assembly]
+
+    if not clean_block['req']:
+        clean_block = {}
     return clean_block
 
 
@@ -267,6 +270,45 @@ def _clean_block(block, genomes):
 #     return mergability, merged_assembly
 
 
+def strict_can_merge(last_assembly, curr_assembly):
+    merged_assembly = {}
+    if (curr_assembly['chrom'] == last_assembly['chrom'] and curr_assembly['strand'] == curr_assembly['strand']):
+        if last_assembly['aln'] == 0 and curr_assembly['aln'] == 0:
+            if (curr_assembly['start'] == last_assembly['start'] and
+                    curr_assembly['length'] == last_assembly['length'] and
+                    curr_assembly['strand'] == last_assembly['strand'] and
+                    curr_assembly['gapStatus'] == last_assembly['gapStatus']):
+                mergability = 1
+                merged_assembly = merge_eachblocks(last_assembly, curr_assembly, 'gap')
+            else:
+                mergability = 0
+        elif last_assembly['aln'] == 1 and curr_assembly['aln'] == 1:
+            if last_assembly['rightStatus']:
+                if (last_assembly['rightStatus'] == 'C' and
+                        last_assembly['rightCount'] == 0 and
+                        curr_assembly['leftStatus'] == 'C' and
+                        curr_assembly['leftCount'] == 0):
+                    if last_assembly['start'] + last_assembly['length'] == curr_assembly['start']:
+                        mergability = 1
+                        merged_assembly = merge_eachblocks(last_assembly, curr_assembly, 'aln')
+                    else:
+                        mergability = 0
+                else:
+                    mergability = 0
+            else:  # the anchor assembly
+                if last_assembly['start'] + last_assembly['length'] == curr_assembly['start']:
+                    mergability = 1
+                    merged_assembly = merge_eachblocks(last_assembly, curr_assembly, 'anchor')
+                else:
+                    mergability = 0
+
+        else:
+            mergability = 0
+    else:
+        mergability = 0
+    return mergability, merged_assembly
+
+
 def merge_eachblocks(last_assembly, curr_assembly, kind):
     merged = {}
     for key in ('chrom', 'start', 'strand', 'chrlenth', 'aln'):
@@ -339,6 +381,43 @@ def merge_eachblocks(last_assembly, curr_assembly, kind):
         merged['deletion'] = last_assembly['deletion'] + curr_assembly['deletion']
 
     return merged
+
+
+def print_block(block, Out):
+    refList = []
+    alnList = []
+    gapList = []
+    if block:
+        Out.write("a\tscore=%.6f\n" % (block['anno']['score']))
+        # Out.write("a\tscore= %.6f\n" % (6.66))
+        for key in block['req']:
+            if 'seq' in block['req'][key] and 'leftStatus' not in block['req'][key]:
+                refList.append(key)
+            if 'seq' in block['req'][key] and 'leftStatus' in block['req'][key]:
+                alnList.append(key)
+            if 'gapStatus' in block['req'][key]:
+                gapList.append(key)
+        # if len(refList) > 1:
+        #     print("missing i line?")
+        for key in refList:
+            # Out.write("%s.%s\t%d\t%d\t%s\t=\n" % (key, block['req'][key]['chrom'], block['req'][key]['start'], block['req'][key]['length'], block['req'][key]['strand']))
+            Out.write("s\t%s.%s\t%d\t%d\t%s\t%d\t%s\n" % (key, block['req'][key]['chrom'], block['req'][key]['start'], block['req'][key]['length'], block['req'][key]['strand'], block['req'][key]['chrlenth'], block['req'][key]['seq']))
+        for key in alnList:
+            # Out.write("%s.%s\t%d\t%d\t%s\t=\n" % (key, block['req'][key]['chrom'], block['req'][key]['start'], block['req'][key]['length'], block['req'][key]['strand']))
+            Out.write("s\t%s.%s\t%d\t%d\t%s\t%d\t%s\n" % (key, block['req'][key]['chrom'], block['req'][key]['start'], block['req'][key]['length'], block['req'][key]['strand'], block['req'][key]['chrlenth'], block['req'][key]['seq']))
+            Out.write("i\t%s.%s\t%s\t%d\t%s\t%d\n" % (key, block['req'][key]['chrom'], block['req'][key]['leftStatus'], block['req'][key]['leftCount'], block['req'][key]['rightStatus'], block['req'][key]['rightCount']))
+        for key in gapList:
+            # Out.write("%s.%s\t%d\t%d\t%s\t-\n" % (key, block['req'][key]['chrom'], block['req'][key]['start'], block['req'][key]['length'], block['req'][key]['strand']))
+            Out.write("e\t%s.%s\t%d\t%d\t%s\t%d\t%s\n" % (key, block['req'][key]['chrom'], block['req'][key]['start'], block['req'][key]['length'], block['req'][key]['strand'], block['req'][key]['chrlenth'], block['req'][key]['gapStatus']))
+
+
+        # for key in block:
+        #     if key == 'score':
+        #         continue
+        #     Out.write("%s.%s\t%d\t%d\t%s\t=\n" % (key, block[key]['chrom'], block[key]['start'], block[key]['length'], block[key]['strand']))
+
+
+        Out.write("\n")
 
 
 if __name__ == '__main__':

@@ -702,7 +702,7 @@ def print_block(block, Out):
     alnList = []
     gapList = []
     if bool(block):
-        Out.write("a\tscore: %.6f\n" % (block['score']))
+        Out.write("a\tscore=%.6f\n" % (block['score']))
         # Out.write("a\tscore= %.6f\n" % (6.66))
         for key in block:
             if key == 'score':
@@ -713,7 +713,8 @@ def print_block(block, Out):
                 alnList.append(key)
             if 'gapStatus' in block[key]:
                 gapList.append(key)
-        if len(refList) > 1: print("missing i line?")
+        # if len(refList) > 1:
+        #     print("missing i line?")
         for key in refList:
             # Out.write("%s.%s\t%d\t%d\t%s\t=\n" % (key, block[key]['chrom'], block[key]['start'], block[key]['length'], block[key]['strand']))
             Out.write("s\t%s.%s\t%d\t%d\t%s\t%d\t%s\n" % (key, block[key]['chrom'], block[key]['start'], block[key]['length'], block[key]['strand'], block[key]['chrlenth'], block[key]['seq']))
