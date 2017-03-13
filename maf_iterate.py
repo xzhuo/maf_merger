@@ -309,7 +309,7 @@ def strict_can_merge(last_assembly, curr_assembly):
     return mergability, merged_assembly
 
 
-def indel_can_merge(holding_assemblies, curr_assembly, indel_length):
+def block_can_merge(holding_assemblies, curr_assembly, indel_length):
     last_assembly = holding_assemblies[-1]
     merged_assembly = {}
     if (curr_assembly['chrom'] == last_assembly['chrom'] and curr_assembly['strand'] == curr_assembly['strand']):
@@ -367,11 +367,17 @@ def indel_can_merge(holding_assemblies, curr_assembly, indel_length):
                 mergability = 0
         elif last_assembly['aln'] == 0 and curr_assembly['aln'] == 1:
             # the hard work ahead here:
+            if last_assembly['deletion'] < indel_length:
+                if (last_assembly['start'] + last_assembly['length'] == curr_assembly['start']):
+                    mergability = 3
+            else:
+                mergability = 0
 
         else:
             mergability = 0
     else:
         mergability = 0
+    # return mergability
     return mergability, merged_assembly
 
 
@@ -449,13 +455,33 @@ def merge_assemblies(last_assembly, curr_assembly, kind):
     return merged
 
 
+def print_blocks(blocks, indel_length):
+    if len(blocks) > 0:
+        holding_blocks = []
+        for curr_block in blocks:
+            if len(holding_blocks) > 0:
+                last_block = holding_blocks[-1]
+                if last_block['stat'] == curr_block['stat']:  # merge
+                    # merge
+                    last_block = merge(last_block, curr_block)
+                elif curr_block.length > indel_length:
+                    for block in holding_blocks:
+                        print_block(block)
+                    holding_blocks = []
+                    holding_blocks.append(curr_block)
+                else:
+                    holding_blocks.append(curr_block)
+
+            else:
+                holding_blocks.append(curr_block)
+
+
 def print_block(block, Out):
     refList = []
     alnList = []
     gapList = []
     if block:
         Out.write("a\tscore=%.6f\n" % (block['anno']['score']))
-        # Out.write("a\tscore= %.6f\n" % (6.66))
         for key in block['req']:
             if 'seq' in block['req'][key] and 'leftStatus' not in block['req'][key]:
                 refList.append(key)

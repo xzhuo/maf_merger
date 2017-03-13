@@ -14,45 +14,51 @@ def main():
             if 'req' in curr_block:
                 if len(holding_blocks) > 0:
                     last_block = holding_blocks[-1]
-                    if ('req' in last_block and
-                            len(curr_block['req']) == len(last_block['req'])):
-                        merged_block = {}
-                        merged_block['req'] = OrderedDict()
-                        merged_block['anno'] = {}
-                        merge = 1
-                        for assembly in curr_block['req']:
+                    block_mergability = 1
+                    merged_block = {}
+                    merged_block['req'] = OrderedDict()
+                    merged_block['anno'] = {}
+                    for assembly in genomes:
+                        if assembly in curr_block['req']:
                             if assembly in last_block['req']:
-                                holding_assemblies = [x['req'][assembly] for x in holding_blocks]
-                                mergability, merged_assembly = maf_iterate.indel_can_merge(holding_assemblies, curr_block['req'][assembly], indel)
-                                if mergability == 1:
-                                    merged_block['req'][assembly] = merged_assembly
-                                elif mergability == 2:
-                                    merge = 2
-                                else:
-                                    merge = 0
+                                mergability, merged_assembly = maf_iterate.block_can_merge(last_block['req'][assembly], curr_block['req'][assembly], indel)
+                                if mergability == 0:
+                                    block_mergability = 0
                                     break
+                                if mergability == 2:
+                                    
+                                if mergability == 1:
+                                    block_mergability = 1
+                                    merged_block['req'][assembly] = merged_assembly
+                                else:
+                                    curr_block['stat'][assembly]['status'] = curr_block['req'][assembly]['aln']
+                                    curr_block['stat'][assembly]['num'] = last_block['stat'][assembly]['num'] + 1
                             else:
-                                merge = 0
-                                break
-                    else:
-                        merge = 0
+                                curr_block['stat'][assembly]['status'] = curr_block['req'][assembly]['aln']
+                                curr_block['stat'][assembly]['num'] = last_block['stat'][assembly]['num'] + 1
+                        elif assembly not in last_block['req']:
+                            curr_block['stat'][assembly]['status'] = 'N'
+                            curr_block['stat'][assembly]['num'] = last_block['stat'][assembly]['num']
+                        else:
+                            curr_block['stat'][assembly]['status'] = 'N'
+                            curr_block['stat'][assembly]['num'] = last_block['stat'][assembly]['num'] + 1
 
-                    if merge == 0:
-                        # print all the blocks in holding block, and initiate holding_block, append curr_block to it
-                        for block in holding_blocks:
-                            maf_iterate.print_block(block, Out)
-
-                        holding_blocks = []
-                        last_block = copy.deepcopy(curr_block)
-                    elif merge == 2:
-                        append_block = copy.deepcopy(curr_block)
-                        holding_blocks.append(append_block)
-                    else:
-                        merged_block['anno']['score'] = last_block['anno']['score'] + curr_block['anno']['score']
-                        last_block = copy.deepcopy(merged_block)
-                else:
                     holding_blocks.append(curr_block)
-        maf_iterate.print_block(last_block, Out)
+
+                else:
+                    for assembly in genomes:
+                        if assembly in curr_block['req']:
+                            curr_block['stat'][assembly]['status'] = curr_block['req'][assembly]['aln']
+                            curr_block['stat'][assembly]['num'] = 1
+                        else:
+                            curr_block['stat'][assembly]['status'] = "N"
+                            curr_block['stat'][assembly]['num'] = 1
+                    print_blocks(holding_blocks, Out)
+                    holding_blocks = []
+                    holding_blocks.append(curr_block)
+        
+        print_blocks(holding_blocks, Out)
+
 
 if __name__ == '__main__':
     main()
