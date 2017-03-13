@@ -82,7 +82,6 @@ def main():
                 status = _compare_blocks(last_block, curr_block)  # return break, totally mergable or hold
 
 
-
 def maf_iterator(in_maf):
     curr_block = {}
     with open(in_maf, 'r') as Fh:
@@ -177,11 +176,12 @@ def _is_aln(curr_block, genomes):
 def clean_block(block, genomes):
     clean_block = {}
     clean_block['anno'] = block['anno']
+    clean_block['req'] = OrderedDict()
     for assembly in block['req']:
         if assembly in genomes:
             clean_block['req'][assembly] = block['req'][assembly]
 
-    if not clean_block['req']:
+    if len(clean_block['req']) == 0:
         clean_block = {}
     return clean_block
 
@@ -206,7 +206,7 @@ def clean_block(block, genomes):
 #                     curr_assembly['strand'] == last_assembly['strand'] and
 #                     curr_assembly['gapStatus'] == last_assembly['gapStatus']):
 #                 mergability = 1
-#                 merged_assembly = merge_eachblocks(last_assembly, curr_assembly, 'gap')
+#                 merged_assembly = merge_assemblies(last_assembly, curr_assembly, 'gap')
 #             else:
 #                 mergability = 0
 #         elif last_assembly['aln'] == 1 and curr_assembly['aln'] == 1:
@@ -216,7 +216,7 @@ def clean_block(block, genomes):
 #                     curr_assembly['leftCount'] == 0):
 #                 if last_assembly['start'] + last_assembly['length'] == curr_assembly['start']:
 #                     mergability = 1
-#                     merged_assembly = merge_eachblocks(last_assembly, curr_assembly, 'aln')
+#                     merged_assembly = merge_assemblies(last_assembly, curr_assembly, 'aln')
 #                 else:
 #                     mergability = 0
 #             else:
@@ -279,18 +279,18 @@ def strict_can_merge(last_assembly, curr_assembly):
                     curr_assembly['strand'] == last_assembly['strand'] and
                     curr_assembly['gapStatus'] == last_assembly['gapStatus']):
                 mergability = 1
-                merged_assembly = merge_eachblocks(last_assembly, curr_assembly, 'gap')
+                merged_assembly = merge_assemblies(last_assembly, curr_assembly, 'gap')
             else:
                 mergability = 0
         elif last_assembly['aln'] == 1 and curr_assembly['aln'] == 1:
-            if last_assembly['rightStatus']:
+            if 'rightStatus' in last_assembly:
                 if (last_assembly['rightStatus'] == 'C' and
                         last_assembly['rightCount'] == 0 and
                         curr_assembly['leftStatus'] == 'C' and
                         curr_assembly['leftCount'] == 0):
                     if last_assembly['start'] + last_assembly['length'] == curr_assembly['start']:
                         mergability = 1
-                        merged_assembly = merge_eachblocks(last_assembly, curr_assembly, 'aln')
+                        merged_assembly = merge_assemblies(last_assembly, curr_assembly, 'aln')
                     else:
                         mergability = 0
                 else:
@@ -298,7 +298,7 @@ def strict_can_merge(last_assembly, curr_assembly):
             else:  # the anchor assembly
                 if last_assembly['start'] + last_assembly['length'] == curr_assembly['start']:
                     mergability = 1
-                    merged_assembly = merge_eachblocks(last_assembly, curr_assembly, 'anchor')
+                    merged_assembly = merge_assemblies(last_assembly, curr_assembly, 'anchor')
                 else:
                     mergability = 0
 
@@ -309,7 +309,73 @@ def strict_can_merge(last_assembly, curr_assembly):
     return mergability, merged_assembly
 
 
-def merge_eachblocks(last_assembly, curr_assembly, kind):
+def indel_can_merge(holding_assemblies, curr_assembly, indel_length):
+    last_assembly = holding_assemblies[-1]
+    merged_assembly = {}
+    if (curr_assembly['chrom'] == last_assembly['chrom'] and curr_assembly['strand'] == curr_assembly['strand']):
+        if last_assembly['aln'] == 0 and curr_assembly['aln'] == 0:
+            if (curr_assembly['start'] == last_assembly['start'] and
+                    curr_assembly['length'] == last_assembly['length'] and
+                    curr_assembly['strand'] == last_assembly['strand'] and
+                    curr_assembly['gapStatus'] == last_assembly['gapStatus']):
+                mergability = 1
+                merged_assembly = merge_assemblies(last_assembly, curr_assembly, 'gap')
+            else:
+                mergability = 0
+        elif last_assembly['aln'] == 1 and curr_assembly['aln'] == 1:
+            if 'rightStatus' in last_assembly:
+                if (last_assembly['rightStatus'] == 'C' and
+                        last_assembly['rightCount'] == 0 and
+                        curr_assembly['leftStatus'] == 'C' and
+                        curr_assembly['leftCount'] == 0):
+                    if last_assembly['start'] + last_assembly['length'] == curr_assembly['start']:
+                        mergability = 1
+                        merged_assembly = merge_assemblies(last_assembly, curr_assembly, 'aln')
+                    else:
+                        mergability = 0
+                elif (last_assembly['rightStatus'] == 'I' and
+                        last_assembly['rightCount'] < indel_length and
+                        curr_assembly['leftStatus'] == 'I' and
+                        curr_assembly['leftCount'] < indel_length and
+                        last_assembly['start'] + last_assembly['length'] + last_assembly['rightCount'] == curr_assembly['start']):
+                    mergability = 1
+                    merged_assembly = merge_assemblies(last_assembly, curr_assembly, 'aln')
+                elif (last_assembly['rightStatus'] == 'M' and
+                        last_assembly['rightCount'] < indel_length and
+                        curr_assembly['leftStatus'] == 'M' and
+                        curr_assembly['leftCount'] < indel_length and
+                        last_assembly['start'] + last_assembly['length'] + last_assembly['rightCount'] == curr_assembly['start']):
+                    mergability = 1
+                    merged_assembly = merge_assemblies(last_assembly, curr_assembly, 'aln')
+
+                else:
+                    mergability = 0
+            else:  # the anchor assembly
+                if last_assembly['start'] + last_assembly['length'] == curr_assembly['start']:
+                    mergability = 1
+                    merged_assembly = merge_assemblies(last_assembly, curr_assembly, 'anchor')
+                else:
+                    mergability = 0
+        elif last_assembly['aln'] == 1 and curr_assembly['aln'] == 0:
+            if curr_assembly['deletion'] < indel_length:
+                if (last_assembly['start'] + last_assembly['length'] == curr_assembly['start'] or
+                        last_assembly['start'] + last_assembly['length'] == curr_assembly['start'] + curr_assembly['length']):
+                    mergability = 2
+                else:
+                    mergability = 0
+            else:
+                mergability = 0
+        elif last_assembly['aln'] == 0 and curr_assembly['aln'] == 1:
+            # the hard work ahead here:
+
+        else:
+            mergability = 0
+    else:
+        mergability = 0
+    return mergability, merged_assembly
+
+
+def merge_assemblies(last_assembly, curr_assembly, kind):
     merged = {}
     for key in ('chrom', 'start', 'strand', 'chrlenth', 'aln'):
         merged[key] = last_assembly[key]
