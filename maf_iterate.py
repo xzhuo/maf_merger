@@ -322,6 +322,7 @@ def block_can_merge(holding_assemblies, curr_assembly, indel_length):
                 merged_assembly = merge_assemblies(last_assembly, curr_assembly, 'gap')
             else:
                 mergability = 0
+                logging.warning("Two different continous e blocks?")
         elif last_assembly['aln'] == 1 and curr_assembly['aln'] == 1:
             if 'rightStatus' in last_assembly:
                 if (last_assembly['rightStatus'] == 'C' and
@@ -333,6 +334,7 @@ def block_can_merge(holding_assemblies, curr_assembly, indel_length):
                         merged_assembly = merge_assemblies(last_assembly, curr_assembly, 'aln')
                     else:
                         mergability = 0
+                        logging.warning("space between 2 continous s blocks?")
                 elif (last_assembly['rightStatus'] == 'I' and
                         last_assembly['rightCount'] < indel_length and
                         curr_assembly['leftStatus'] == 'I' and
@@ -350,6 +352,7 @@ def block_can_merge(holding_assemblies, curr_assembly, indel_length):
 
                 else:
                     mergability = 0
+                    logging.warning("Big insertion in s blocks?")
             else:  # the anchor assembly
                 if last_assembly['start'] + last_assembly['length'] == curr_assembly['start']:
                     mergability = 1
@@ -357,9 +360,8 @@ def block_can_merge(holding_assemblies, curr_assembly, indel_length):
                 else:
                     mergability = 0
         elif last_assembly['aln'] == 1 and curr_assembly['aln'] == 0:
-            if curr_assembly['deletion'] < indel_length:
-                if (last_assembly['start'] + last_assembly['length'] == curr_assembly['start'] or
-                        last_assembly['start'] + last_assembly['length'] == curr_assembly['start'] + curr_assembly['length']):
+            if curr_assembly['length'] < indel_length:
+                if (last_assembly['start'] + last_assembly['length'] == curr_assembly['start']):
                     mergability = 2
                 else:
                     mergability = 0
@@ -367,7 +369,7 @@ def block_can_merge(holding_assemblies, curr_assembly, indel_length):
                 mergability = 0
         elif last_assembly['aln'] == 0 and curr_assembly['aln'] == 1:
             # the hard work ahead here:
-            if last_assembly['deletion'] < indel_length:
+            if last_assembly['length'] < indel_length:
                 if (last_assembly['start'] + last_assembly['length'] == curr_assembly['start']):
                     mergability = 3
             else:

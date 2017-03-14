@@ -14,25 +14,29 @@ def main():
             if 'req' in curr_block:
                 if len(holding_blocks) > 0:
                     last_block = holding_blocks[-1]
-                    block_mergability = 1
-                    merged_block = {}
-                    merged_block['req'] = OrderedDict()
-                    merged_block['anno'] = {}
                     for assembly in genomes:
                         if assembly in curr_block['req']:
                             if assembly in last_block['req']:
                                 mergability, merged_assembly = maf_iterate.block_can_merge(last_block['req'][assembly], curr_block['req'][assembly], indel)
-                                if mergability == 0:
-                                    block_mergability = 0
-                                    break
-                                if mergability == 2:
-                                    
                                 if mergability == 1:
-                                    block_mergability = 1
-                                    merged_block['req'][assembly] = merged_assembly
-                                else:
                                     curr_block['stat'][assembly]['status'] = curr_block['req'][assembly]['aln']
-                                    curr_block['stat'][assembly]['num'] = last_block['stat'][assembly]['num'] + 1
+                                    curr_block['stat'][assembly]['num'] = last_block['stat'][assembly]['num']
+                                elif mergability == 2:
+                                    sdf
+                                elif mergability == 3:
+                                    ssf
+                                else:
+                                    break
+                                    for assembly in genomes:
+                                        if assembly in curr_block['req']:
+                                            curr_block['stat'][assembly]['status'] = curr_block['req'][assembly]['aln']
+                                            curr_block['stat'][assembly]['num'] = 1
+                                        else:
+                                            curr_block['stat'][assembly]['status'] = "N"
+                                            curr_block['stat'][assembly]['num'] = 1
+                                    maf_iterate.print_blocks(holding_blocks, Out)
+                                    holding_blocks = []
+                                    holding_blocks.append(curr_block)
                             else:
                                 curr_block['stat'][assembly]['status'] = curr_block['req'][assembly]['aln']
                                 curr_block['stat'][assembly]['num'] = last_block['stat'][assembly]['num'] + 1
@@ -53,11 +57,11 @@ def main():
                         else:
                             curr_block['stat'][assembly]['status'] = "N"
                             curr_block['stat'][assembly]['num'] = 1
-                    print_blocks(holding_blocks, Out)
+                    maf_iterate.print_blocks(holding_blocks, Out)
                     holding_blocks = []
                     holding_blocks.append(curr_block)
         
-        print_blocks(holding_blocks, Out)
+        maf_iterate.print_blocks(holding_blocks, Out)
 
 
 if __name__ == '__main__':
