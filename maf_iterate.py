@@ -309,8 +309,7 @@ def strict_can_merge(last_assembly, curr_assembly):
     return mergability, merged_assembly
 
 
-def block_can_merge(holding_assemblies, curr_assembly, indel_length):
-    last_assembly = holding_assemblies[-1]
+def block_can_merge(last_assembly, curr_assembly, indel_length):
     merged_assembly = {}
     if (curr_assembly['chrom'] == last_assembly['chrom'] and curr_assembly['strand'] == curr_assembly['strand']):
         if last_assembly['aln'] == 0 and curr_assembly['aln'] == 0:
@@ -319,10 +318,12 @@ def block_can_merge(holding_assemblies, curr_assembly, indel_length):
                     curr_assembly['strand'] == last_assembly['strand'] and
                     curr_assembly['gapStatus'] == last_assembly['gapStatus']):
                 mergability = 1
+                indel_dict = {'insertion': curr_assembly['length'], 'deletion': last_assembly['deletion'] + curr_assembly['deletion']}
                 merged_assembly = merge_assemblies(last_assembly, curr_assembly, 'gap')
             else:
                 mergability = 0
-                logging.warning("Two different continous e blocks?")
+                indel_dict = {'insertion': curr_assembly['length'], 'deletion': curr_assembly['deletion']}
+                logging.warning("Two different continuous e blocks?")
         elif last_assembly['aln'] == 1 and curr_assembly['aln'] == 1:
             if 'rightStatus' in last_assembly:
                 if (last_assembly['rightStatus'] == 'C' and
@@ -331,16 +332,18 @@ def block_can_merge(holding_assemblies, curr_assembly, indel_length):
                         curr_assembly['leftCount'] == 0):
                     if last_assembly['start'] + last_assembly['length'] == curr_assembly['start']:
                         mergability = 1
+                        indel_dict = {'insertion': 0, 'deletion': 0}
                         merged_assembly = merge_assemblies(last_assembly, curr_assembly, 'aln')
                     else:
                         mergability = 0
-                        logging.warning("space between 2 continous s blocks?")
+                        logging.warning("space between 2 continuous s blocks?")
                 elif (last_assembly['rightStatus'] == 'I' and
                         last_assembly['rightCount'] < indel_length and
                         curr_assembly['leftStatus'] == 'I' and
                         curr_assembly['leftCount'] < indel_length and
                         last_assembly['start'] + last_assembly['length'] + last_assembly['rightCount'] == curr_assembly['start']):
                     mergability = 1
+                    indel_dict = {'insertion': curr_assembly['rightCount'], 'deletion': 0}
                     merged_assembly = merge_assemblies(last_assembly, curr_assembly, 'aln')
                 elif (last_assembly['rightStatus'] == 'M' and
                         last_assembly['rightCount'] < indel_length and
@@ -348,6 +351,7 @@ def block_can_merge(holding_assemblies, curr_assembly, indel_length):
                         curr_assembly['leftCount'] < indel_length and
                         last_assembly['start'] + last_assembly['length'] + last_assembly['rightCount'] == curr_assembly['start']):
                     mergability = 1
+                    indel_dict = {'insertion': curr_assembly['rightCount'], 'deletion': 0}
                     merged_assembly = merge_assemblies(last_assembly, curr_assembly, 'aln')
 
                 else:
@@ -356,6 +360,7 @@ def block_can_merge(holding_assemblies, curr_assembly, indel_length):
             else:  # the anchor assembly
                 if last_assembly['start'] + last_assembly['length'] == curr_assembly['start']:
                     mergability = 1
+                    indel_dict = {'insertion': 0, 'deletion': 0}
                     merged_assembly = merge_assemblies(last_assembly, curr_assembly, 'anchor')
                 else:
                     mergability = 0
@@ -363,6 +368,7 @@ def block_can_merge(holding_assemblies, curr_assembly, indel_length):
             if curr_assembly['length'] < indel_length:
                 if (last_assembly['start'] + last_assembly['length'] == curr_assembly['start']):
                     mergability = 2
+                    indel_dict = {'insertion': curr_assembly['length'], 'deletion': curr_assembly['deletion']}
                 else:
                     mergability = 0
             else:
@@ -372,6 +378,7 @@ def block_can_merge(holding_assemblies, curr_assembly, indel_length):
             if last_assembly['length'] < indel_length:
                 if (last_assembly['start'] + last_assembly['length'] == curr_assembly['start']):
                     mergability = 3
+                    indel_dict = {'insertion': curr_assembly['rightCount'], 'deletion': 0}
             else:
                 mergability = 0
 
@@ -380,7 +387,7 @@ def block_can_merge(holding_assemblies, curr_assembly, indel_length):
     else:
         mergability = 0
     # return mergability
-    return mergability, merged_assembly
+    return mergability, indel_dict
 
 
 def merge_assemblies(last_assembly, curr_assembly, kind):
@@ -457,26 +464,49 @@ def merge_assemblies(last_assembly, curr_assembly, kind):
     return merged
 
 
-def print_blocks(blocks, indel_length):
+def print_blocks(blocks, indel_length):  # combine blocks to units, then print them
     if len(blocks) > 0:
-        holding_blocks = []
+        units = []
         for curr_block in blocks:
-            if len(holding_blocks) > 0:
-                last_block = holding_blocks[-1]
-                if last_block['stat'] == curr_block['stat']:  # merge
+            if len(units) > 0:
+                last_unit = units[-1]
+                if last_unit['stat'] == curr_block['stat']:
                     # merge
-                    last_block = merge(last_block, curr_block)
-                elif curr_block.length > indel_length:
-                    for block in holding_blocks:
-                        print_block(block)
-                    holding_blocks = []
-                    holding_blocks.append(curr_block)
+                    last_unit = combine_blocks_to_units(last_unit, curr_block)
+                    if unit_length(last_unit) > indel_length:
+                        print_pop_units(units[:-1])
+                elif (unit_length(curr_block) < indel_length):
+                    units.append(curr_block)
                 else:
-                    holding_blocks.append(curr_block)
-
+                    print_pop_units(units)
+                    units.append(curr_block)
             else:
-                holding_blocks.append(curr_block)
+                units.append(curr_block)
 
+
+def combine_blocks_to_units(unit, block):
+    merged = {}
+    merged['anno'] = {}
+    merged['req'] = {}
+    merged['stat'] = unit['stat']
+    merged['anno']['score'] = unit['anno']['score'] + block['anno']['score']
+    for assembly in unit['req']:
+        if unit['req'][assembly]['aln'] == 1 and block['req'][assembly]['aln'] == 1:
+            if 'leftStatus' in unit['req'][assembly]:
+                merged['req'][assembly] = merge_assemblies(unit['req'][assembly], block['req'][assembly], 'aln')
+            else:
+                merged['req'][assembly] = merge_assemblies(unit['req'][assembly], block['req'][assembly], 'anchor')
+        elif unit['req'][assembly]['aln'] == 0 and block['req'][assembly]['aln'] == 0:
+            merged['req'][assembly] = merge_assemblies(unit['req'][assembly], block['req'][assembly], 'gap')
+        elif unit['req'][assembly]['aln'] == 1 and block['req'][assembly]['aln'] == 0:
+            merged['req'][assembly] = merge_assemblies(unit['req'][assembly], block['req'][assembly], 'mix')
+        elif unit['req'][assembly]['aln'] == 0 and block['req'][assembly]['aln'] == 1:
+            merged['req'][assembly] = merge_assemblies(unit['req'][assembly], block['req'][assembly], 'mix2')
+    return merged
+
+
+def unit_length(unit):
+    
 
 def print_block(block, Out):
     refList = []

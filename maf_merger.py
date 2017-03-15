@@ -17,26 +17,31 @@ def main():
                     for assembly in genomes:
                         if assembly in curr_block['req']:
                             if assembly in last_block['req']:
-                                mergability, merged_assembly = maf_iterate.block_can_merge(last_block['req'][assembly], curr_block['req'][assembly], indel)
+                                mergability, indel_dict = maf_iterate.block_can_merge(last_block['req'][assembly], curr_block['req'][assembly], indel)
+                                curr_block['req'][assembly]["deletion"] = indel_dict['deletion']
+                                curr_block['req'][assembly]["insertion"] = indel_dict['insertion']
                                 if mergability == 1:
                                     curr_block['stat'][assembly]['status'] = curr_block['req'][assembly]['aln']
                                     curr_block['stat'][assembly]['num'] = last_block['stat'][assembly]['num']
+
                                 elif mergability == 2:
-                                    sdf
+                                    curr_block['stat'][assembly]['tempstatus'] = 1
+                                    curr_block['stat'][assembly]['tempnum'] = last_block['stat'][assembly]['num']
+                                    curr_block['stat'][assembly]['status'] = 0
+                                    curr_block['stat'][assembly]['num'] = last_block['stat'][assembly]['num'] + 1
                                 elif mergability == 3:
-                                    ssf
+                                    curr_block['stat'][assembly]['status'] = 1
+                                    curr_block['stat'][assembly]['num'] = last_block['stat'][assembly]['num'] - 1
+                                    i = -1
+                                    while ('tempstatus' in holding_blocks[i]['stat'][assembly] and holding_blocks[i]['stat'][assembly]['tempstatus'] == 0):
+                                        holding_blocks[i]['stat'][assembly]['status'] = 1
+                                        holding_blocks[i]['stat'][assembly]['num'] -= 1
+                                        holding_blocks[i]['stat'][assembly].pop('tempstatus')
+                                        holding_blocks[i]['stat'][assembly].pop('tempnum')
+                                        i -= 1
                                 else:
-                                    break
-                                    for assembly in genomes:
-                                        if assembly in curr_block['req']:
-                                            curr_block['stat'][assembly]['status'] = curr_block['req'][assembly]['aln']
-                                            curr_block['stat'][assembly]['num'] = 1
-                                        else:
-                                            curr_block['stat'][assembly]['status'] = "N"
-                                            curr_block['stat'][assembly]['num'] = 1
-                                    maf_iterate.print_blocks(holding_blocks, Out)
-                                    holding_blocks = []
-                                    holding_blocks.append(curr_block)
+                                    curr_block['stat'][assembly]['status'] = curr_block['req'][assembly]['aln']
+                                    curr_block['stat'][assembly]['num'] = last_block['stat'][assembly]['num'] + 1
                             else:
                                 curr_block['stat'][assembly]['status'] = curr_block['req'][assembly]['aln']
                                 curr_block['stat'][assembly]['num'] = last_block['stat'][assembly]['num'] + 1
@@ -57,10 +62,7 @@ def main():
                         else:
                             curr_block['stat'][assembly]['status'] = "N"
                             curr_block['stat'][assembly]['num'] = 1
-                    maf_iterate.print_blocks(holding_blocks, Out)
-                    holding_blocks = []
                     holding_blocks.append(curr_block)
-        
         maf_iterate.print_blocks(holding_blocks, Out)
 
 
