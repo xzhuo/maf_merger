@@ -473,15 +473,17 @@ def print_blocks(blocks, indel_length):  # combine blocks to units, then print t
                 if last_unit['stat'] == curr_block['stat']:
                     # merge
                     last_unit = combine_blocks_to_units(last_unit, curr_block)
-                    if unit_length(last_unit) > indel_length:
-                        print_pop_units(units[:-1])
-                elif (unit_length(curr_block) < indel_length):
-                    units.append(curr_block)
                 else:
-                    print_pop_units(units)
                     units.append(curr_block)
+                    # if (unit_length(units[-2])) < indel_length:
+                    #     merge_units(units[-3], units[-2], units[-1])
+                    # else:
+                    #     print_pop_unit(units[-3])
+                    print_block(units[-2])
+                    units.pop[-2]
             else:
                 units.append(curr_block)
+        print_block(units[-1])
 
 
 def combine_blocks_to_units(unit, block):
@@ -491,22 +493,43 @@ def combine_blocks_to_units(unit, block):
     merged['stat'] = unit['stat']
     merged['anno']['score'] = unit['anno']['score'] + block['anno']['score']
     for assembly in unit['req']:
-        if unit['req'][assembly]['aln'] == 1 and block['req'][assembly]['aln'] == 1:
-            if 'leftStatus' in unit['req'][assembly]:
-                merged['req'][assembly] = merge_assemblies(unit['req'][assembly], block['req'][assembly], 'aln')
-            else:
-                merged['req'][assembly] = merge_assemblies(unit['req'][assembly], block['req'][assembly], 'anchor')
-        elif unit['req'][assembly]['aln'] == 0 and block['req'][assembly]['aln'] == 0:
-            merged['req'][assembly] = merge_assemblies(unit['req'][assembly], block['req'][assembly], 'gap')
-        elif unit['req'][assembly]['aln'] == 1 and block['req'][assembly]['aln'] == 0:
-            merged['req'][assembly] = merge_assemblies(unit['req'][assembly], block['req'][assembly], 'mix')
-        elif unit['req'][assembly]['aln'] == 0 and block['req'][assembly]['aln'] == 1:
-            merged['req'][assembly] = merge_assemblies(unit['req'][assembly], block['req'][assembly], 'mix2')
+        merged['req'][assembly] = merge_all_assemblies(unit['req'][assembly], block['req'][assembly])
     return merged
 
 
+def merge_all_assemblies(last_assembly, curr_assembly):
+    if last_assembly['aln'] == 1 and curr_assembly['aln'] == 1:
+        if 'leftStatus' in last_assembly:
+            merged_assembly = merge_assemblies(last_assembly, curr_assembly, 'aln')
+        else:
+            merged_assembly = merge_assemblies(last_assembly, curr_assembly, 'anchor')
+    elif last_assembly['aln'] == 0 and curr_assembly['aln'] == 0:
+        merged_assembly = merge_assemblies(last_assembly, curr_assembly, 'gap')
+    elif last_assembly['aln'] == 1 and curr_assembly['aln'] == 0:
+        merged_assembly = merge_assemblies(last_assembly, curr_assembly, 'mix')
+    elif last_assembly['aln'] == 0 and curr_assembly['aln'] == 1:
+        merged_assembly = merge_assemblies(last_assembly, curr_assembly, 'mix2')
+    return merged_assembly
+
+
 def unit_length(unit):
-    
+    return max(unit['req'][assembly]['length'] for assembly in unit['req'])
+
+
+def merge_units(first_unit, mid_unit, last_unit):  # TODO here
+    merged = {}
+    merged['anno'] = {}
+    merged['req'] = {}
+    merged['stat'] = first_unit['stat']
+    merged['anno']['score'] = first_unit['anno']['score'] + mid_unit['anno']['score']
+    for assembly in first_unit['stat']:
+        if first_unit['stat'][assembly] == mid_unit['stat'][assembly]:
+            if first_unit['stat'][assembly]['status'] != 'N':
+                merged['req'][assembly] = merge_all_assemblies(first_unit['req'][assembly], mid_unit['req'][assembly])
+
+
+# def print_unit(unit):
+
 
 def print_block(block, Out):
     refList = []
