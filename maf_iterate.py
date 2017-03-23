@@ -37,6 +37,14 @@ def get_args():
         default=False,
         help='print a log file',
     )
+    parser.add_argument(  # TODO, incoporate this.
+        '--level',
+        '-v',
+        action="store",
+        dest="lvl",
+        default=False,
+        help='numeric logging level. 0 for NOTSET, 10 for DEBUG, 20 for INFO, 30 for WARNING, 40 for ERROR, 50 for CRITICAL.',
+    )
     parser.add_argument(
         '--directory',
         '-d',
@@ -65,7 +73,7 @@ def get_args():
 def main():
     args = get_args()
     genomes = args.assemblies.split(",")  # The list to store all included genomes
-    anchor = genomes[0]
+    # anchor = genomes[0]
     if args.log:
         logging.basicConfig(filename=args.out + '.log', filemode='w', level=logging.INFO)
     holding_blocks = []
@@ -326,13 +334,13 @@ def block_can_merge(last_assembly, curr_assembly, indel_length):
                 logging.warning("Two different continuous e blocks?")
         elif last_assembly['aln'] == 1 and curr_assembly['aln'] == 1:
             if 'rightStatus' in last_assembly:
+                indel_dict = {'insertion': curr_assembly['rightCount'], 'deletion': 0}
                 if (last_assembly['rightStatus'] == 'C' and
                         last_assembly['rightCount'] == 0 and
                         curr_assembly['leftStatus'] == 'C' and
                         curr_assembly['leftCount'] == 0):
                     if last_assembly['start'] + last_assembly['length'] == curr_assembly['start']:
                         mergability = 1
-                        indel_dict = {'insertion': 0, 'deletion': 0}
                         merged_assembly = merge_assemblies(last_assembly, curr_assembly, 'aln')
                     else:
                         mergability = 0
@@ -343,7 +351,6 @@ def block_can_merge(last_assembly, curr_assembly, indel_length):
                         curr_assembly['leftCount'] < indel_length and
                         last_assembly['start'] + last_assembly['length'] + last_assembly['rightCount'] == curr_assembly['start']):
                     mergability = 1
-                    indel_dict = {'insertion': curr_assembly['rightCount'], 'deletion': 0}
                     merged_assembly = merge_assemblies(last_assembly, curr_assembly, 'aln')
                 elif (last_assembly['rightStatus'] == 'M' and
                         last_assembly['rightCount'] < indel_length and
@@ -351,34 +358,35 @@ def block_can_merge(last_assembly, curr_assembly, indel_length):
                         curr_assembly['leftCount'] < indel_length and
                         last_assembly['start'] + last_assembly['length'] + last_assembly['rightCount'] == curr_assembly['start']):
                     mergability = 1
-                    indel_dict = {'insertion': curr_assembly['rightCount'], 'deletion': 0}
                     merged_assembly = merge_assemblies(last_assembly, curr_assembly, 'aln')
 
                 else:
                     mergability = 0
                     logging.warning("Big insertion in s blocks?")
             else:  # the anchor assembly
+                indel_dict = {'insertion': 0, 'deletion': 0}
                 if last_assembly['start'] + last_assembly['length'] == curr_assembly['start']:
                     mergability = 1
-                    indel_dict = {'insertion': 0, 'deletion': 0}
                     merged_assembly = merge_assemblies(last_assembly, curr_assembly, 'anchor')
                 else:
                     mergability = 0
         elif last_assembly['aln'] == 1 and curr_assembly['aln'] == 0:
+            indel_dict = {'insertion': curr_assembly['length'], 'deletion': curr_assembly['deletion']}
             if curr_assembly['length'] < indel_length:
                 if (last_assembly['start'] + last_assembly['length'] == curr_assembly['start']):
                     mergability = 2
-                    indel_dict = {'insertion': curr_assembly['length'], 'deletion': curr_assembly['deletion']}
                 else:
                     mergability = 0
             else:
                 mergability = 0
         elif last_assembly['aln'] == 0 and curr_assembly['aln'] == 1:
             # the hard work ahead here:
+            indel_dict = {'insertion': curr_assembly['rightCount'], 'deletion': 0}
             if last_assembly['length'] < indel_length:
                 if (last_assembly['start'] + last_assembly['length'] == curr_assembly['start']):
                     mergability = 3
-                    indel_dict = {'insertion': curr_assembly['rightCount'], 'deletion': 0}
+                else:
+                    mergability = 0
             else:
                 mergability = 0
 
@@ -386,6 +394,13 @@ def block_can_merge(last_assembly, curr_assembly, indel_length):
             mergability = 0
     else:
         mergability = 0
+        if curr_assembly['aln'] == 1:
+            if 'rightStatus' in last_assembly:
+                indel_dict = {'insertion': curr_assembly['rightCount'], 'deletion': 0}
+            else:
+                indel_dict = {'insertion': 0, 'deletion': 0}
+        elif curr_assembly['aln'] == 0:
+            indel_dict = {'insertion': curr_assembly['length'], 'deletion': curr_assembly['deletion']}
     # return mergability
     return mergability, indel_dict
 
@@ -411,26 +426,31 @@ def merge_assemblies(last_assembly, curr_assembly, kind):
             merged[key] = curr_assembly[key]
 
     if kind == 'mix':
-        merged['length'] = last_assembly['length'] + curr_assembly['length']
-        if curr_assembly['gapStatus'] == 'C':
-            merged['seq'] = last_assembly['seq'] + '-' * curr_assembly['length']
-        if curr_assembly['gapStatus'] == 'I' or curr_assembly['gapStatus'] == 'M':
-            merged['seq'] = last_assembly['seq'] + 'N' * curr_assembly['length']
-        if 'quality' in last_assembly and 'quality' in curr_assembly:
-            merged['quality'] = last_assembly['quality'] + curr_assembly['quality']
+        if last_assembly['start'] + last_assembly['length'] == curr_assembly['start']:
+            merged['length'] = last_assembly['length'] + curr_assembly['length']
+            if curr_assembly['gapStatus'] == 'C':
+                merged['seq'] = last_assembly['seq'] + '-' * curr_assembly['length']
+            if curr_assembly['gapStatus'] == 'I' or curr_assembly['gapStatus'] == 'M':
+                merged['seq'] = last_assembly['seq'] + 'N' * curr_assembly['length']
+            if 'quality' in last_assembly and 'quality' in curr_assembly:
+                merged['quality'] = last_assembly['quality'] + curr_assembly['quality']
 
-        for key in ('leftStatus', 'leftCount'):
-            merged[key] = last_assembly[key]
-        merged['rightCount'] = last_assembly['rightCount'] - curr_assembly['length']
-        if last_assembly['rightStatus'] == 'N' or last_assembly['rightStatus'] == 'n':
-            merged['rightStatus'] = last_assembly['rightStatus']
-        elif merged['rightCount'] > 0:
-            merged['rightStatus'] = 'I'
-        elif merged['rightCount'] == 0:
-            merged['rightStatus'] = 'C'
+            for key in ('leftStatus', 'leftCount'):
+                merged[key] = last_assembly[key]
+            merged['rightCount'] = last_assembly['rightCount'] - curr_assembly['length']
+            if last_assembly['rightStatus'] == 'N' or last_assembly['rightStatus'] == 'n':
+                merged['rightStatus'] = last_assembly['rightStatus']
+            elif merged['rightCount'] > 0:
+                merged['rightStatus'] = 'I'
+            elif merged['rightCount'] == 0:
+                merged['rightStatus'] = 'C'
+            else:
+                logging.error('length error during merge blocks!')
+        elif last_assembly['start'] + last_assembly['length'] == curr_assembly['start'] + curr_assembly['length']:
+            merged = last_assembly
         else:
-            ipdb.set_trace()
-            logging.error('length error during merge blocks!')
+            logging.error('merge blocks failed in mix!')
+
     if kind == 'mix2':
         merged['aln'] = curr_assembly['aln']
         if last_assembly['start'] + last_assembly['length'] == curr_assembly['start']:
@@ -441,8 +461,10 @@ def merge_assemblies(last_assembly, curr_assembly, kind):
                 merged['seq'] = 'N' * last_assembly['length'] + curr_assembly['seq']
             if 'quality' in last_assembly and 'quality' in curr_assembly:
                 merged['quality'] = last_assembly['quality'] + curr_assembly['quality']
+        elif last_assembly['start'] == curr_assembly['start']:
+            merged = curr_assembly
         else:
-            print('merge blocks failed!!')
+            logging.error('merge blocks failed in mix2!')
         for key in ('rightStatus', 'rightCount'):
             merged[key] = curr_assembly[key]
         merged['leftCount'] = last_assembly['length'] - curr_assembly['leftCount']
@@ -464,7 +486,7 @@ def merge_assemblies(last_assembly, curr_assembly, kind):
     return merged
 
 
-def print_blocks(blocks, indel_length):  # combine blocks to units, then print them
+def print_blocks(blocks, indel_length, Out):  # combine blocks to units, then print them
     if len(blocks) > 0:
         units = []
         for curr_block in blocks:
@@ -472,18 +494,30 @@ def print_blocks(blocks, indel_length):  # combine blocks to units, then print t
                 last_unit = units[-1]
                 if last_unit['stat'] == curr_block['stat']:
                     # merge
-                    last_unit = combine_blocks_to_units(last_unit, curr_block)
+                    units[-1] = combine_blocks_to_units(last_unit, curr_block)
                 else:
                     units.append(curr_block)
+                    if len(units) > 2:
+                        # merge 3 elements in units to 2 if len < 50, or pop and print out the first one
+                        if unit_length(units[-3]) > 50 and unit_length(units[-2]) > 50:
+                            print_block(units[-3], Out)
+                            units.pop(-3)
+                        else:
+                            units = merge_units(units[-3], units[-2], units[-1], Out)
+
+
+
                     # if (unit_length(units[-2])) < indel_length:
-                    #     merge_units(units[-3], units[-2], units[-1])
-                    # else:
-                    #     print_pop_unit(units[-3])
-                    print_block(units[-2])
-                    units.pop[-2]
+                    #     ipdb.set_trace()
+                    #     # merge_units(units[-3], units[-2], units[-1])
+                    # # else:
+                    # #     print_pop_unit(units[-3])
+                    # print_block(units[-2], Out)
+                    # units.pop(-2)
             else:
                 units.append(curr_block)
-        print_block(units[-1])
+        for unit in units:
+            print_block(unit, Out)
 
 
 def combine_blocks_to_units(unit, block):
@@ -513,19 +547,31 @@ def merge_all_assemblies(last_assembly, curr_assembly):
 
 
 def unit_length(unit):
-    return max(unit['req'][assembly]['length'] for assembly in unit['req'])
+        try:
+            return max(unit['req'][assembly]['length'] for assembly in unit['req'])
+        except:
+            ipdb.set_trace()
 
 
-def merge_units(first_unit, mid_unit, last_unit):  # TODO here
-    merged = {}
-    merged['anno'] = {}
-    merged['req'] = {}
-    merged['stat'] = first_unit['stat']
-    merged['anno']['score'] = first_unit['anno']['score'] + mid_unit['anno']['score']
-    for assembly in first_unit['stat']:
-        if first_unit['stat'][assembly] == mid_unit['stat'][assembly]:
+def merge_units(first_unit, mid_unit, last_unit, Out):  # TODO here returns a list with 2 units
+    merged1 = first_unit
+    merged2 = last_unit
+
+    for assembly in mid_unit['stat']:
+        if first_unit['stat'][assembly]['num'] == mid_unit['stat'][assembly]['num']:
             if first_unit['stat'][assembly]['status'] != 'N':
-                merged['req'][assembly] = merge_all_assemblies(first_unit['req'][assembly], mid_unit['req'][assembly])
+                merged1['req'][assembly] = merge_all_assemblies(first_unit['req'][assembly], mid_unit['req'][assembly])
+        elif last_unit['stat'][assembly]['num'] == mid_unit['stat'][assembly]['num']:
+            if last_unit['stat'][assembly]['status'] != 'N':
+                merged2['req'][assembly] = merge_all_assemblies(mid_unit['req'][assembly], last_unit['req'][assembly])
+        else:
+            merged1 = mid_unit
+            merged2 = last_unit
+            print_block(first_unit, Out)
+            logging.warning("hmmmmm")
+            break
+
+    return [merged1, merged2]
 
 
 # def print_unit(unit):
